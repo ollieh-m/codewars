@@ -1,5 +1,7 @@
 require "byebug"
 
+# https://www.codewars.com/kata/hard-sudoku-solver/ruby
+
 def solve(puzzle)
   SudokuSolver.new(puzzle).solution
 end
