@@ -1,13 +1,17 @@
+require "byebug"
+
 def solve(puzzle)
   SudokuSolver.new(puzzle).solution
 end
 
 class SudokuSolver
-  attr_reader :original_puzzle, :solved_puzzle, :progress_tracker, :position, :x, :y
+  attr_reader :original_puzzle, :solved_puzzle, :solved_puzzle_in_columns, :solved_puzzle_in_boxes, :progress_tracker, :position, :x, :y
 
   def initialize(puzzle)
     @original_puzzle = puzzle
-    @solved_puzzle = puzzle.map(&:clone)
+    @solved_puzzle = clone_original_puzzle
+    @solved_puzzle_in_columns = transpose_solved_puzzle
+    @solved_puzzle_in_boxes = turn_solved_puzzle_boxes_into_rows
     @progress_tracker = []
     @position = 0
   end
@@ -23,6 +27,22 @@ class SudokuSolver
 
   private
 
+    def clone_original_puzzle
+      @original_puzzle.map(&:clone)
+    end
+
+    def transpose_solved_puzzle
+      @solved_puzzle.transpose
+    end
+
+    def turn_solved_puzzle_boxes_into_rows
+      @solved_puzzle.each_slice(3).map(&:transpose).flatten.each_slice(9).to_a
+    end
+
+    def set_coordinates
+      @x, @y = position.divmod(9)
+    end
+
     def try_to_fill_slot
       return if slot_filled_in_original_puzzle? && increment_position
 
@@ -33,18 +53,8 @@ class SudokuSolver
       end
     end
 
-    def set_coordinates
-      @x, @y = position.divmod(9)
-    end
-
     def slot_filled_in_original_puzzle?
-      original_puzzle_zero_lookup[position]
-    end
-
-    def original_puzzle_zero_lookup
-      @_original_puzzle_zero_lookup ||= Hash.new do |hash, key|
-        hash[key] = !original_puzzle[x][y].zero?
-      end
+      !original_puzzle[x][y].zero?
     end
 
     def increment_position
@@ -74,26 +84,30 @@ class SudokuSolver
     end
 
     def column
-      solved_puzzle.map do |row|
-        row[y]
-      end
+      solved_puzzle_in_columns[y]
     end
 
     def box
-      box_start_row = (x / 3) * 3
-      box_start_column = (y / 3) * 3
-      # solved_puzzle.slice(box_start_row, 3).flat_map do |row|
-      #   row.slice(box_start_column, 3)
-      # end
-      solved_puzzle.values_at(box_start_row..box_start_row + 2).flat_map do |row|
-        row.values_at(box_start_column..box_start_column + 2)
-      end
+      solved_puzzle_in_boxes[x_converted_for_boxes_as_rows]
+    end
+
+    def x_converted_for_boxes_as_rows
+      ((x / 3) * 3) + (y / 3)
     end
 
     def success(new_number)
       solved_puzzle[x][y] = new_number
+      solved_puzzle_in_columns[y][x] = new_number
+      solved_puzzle_in_boxes[x_converted_for_boxes_as_rows][y_converted_for_boxes_as_rows] = new_number
+
       track_progress
       increment_position
+    end
+
+    def y_converted_for_boxes_as_rows
+      box_start_row = (x / 3) * 3
+      box_start_column = (y / 3) * 3
+      (x - box_start_row) + ((y - box_start_column) * 3)
     end
 
     def track_progress
@@ -102,6 +116,9 @@ class SudokuSolver
 
     def failure
       solved_puzzle[x][y] = 0
+      solved_puzzle_in_columns[y][x] = 0
+      solved_puzzle_in_boxes[x_converted_for_boxes_as_rows][y_converted_for_boxes_as_rows] = 0
+
       revert_position
     end
 
